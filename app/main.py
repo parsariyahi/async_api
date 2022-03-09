@@ -1,10 +1,8 @@
-from lib2to3.pgen2 import token
-from msilib import schema
 from typing import Optional
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from jose import JWTERROR, jwt
+from jose import JWTError, jwt
 
 SECRET_KEY = 'de7cedf364a2bd8ace889a8179887ddbcbb474bcbb024dd782519f9b59e39d24'
 ALGORITHM = 'HS256'
@@ -43,7 +41,9 @@ class User(BaseModel):
     first_name : Optional[str] = None
     last_name : Optional[str] = None
     email : Optional[str] = None
-    national_id : Optional[int] = None
+    # national id should be string because sometimes it start with 0
+    national_id : Optional[str] = None
+    disabled : Optional[bool] = None
 
 
 class UserInDB(User):
@@ -59,7 +59,7 @@ app = FastAPI()
 
 def user_get(db, username : str) :
     if username in db :
-        user = db['username']
+        user = db[username]
         return UserInDB(**user)
 
 def user_pass_check(password, user_password) :
@@ -69,7 +69,7 @@ def user_authenticate(db, username : str, password : str) :
     user = user_get(db, username)
     if user :
         if user_pass_check(password, user.password) :
-            return True
+            return user
 
     return None
     #return False
@@ -78,7 +78,7 @@ def user_authenticate(db, username : str, password : str) :
 def create_accsess_token(data : dict) :
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
-async def user_current_get(token : str = Depends(schema)) :
+async def user_current_get(token : str = Depends(scheme)) :
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Could not validate credentials",
@@ -86,15 +86,22 @@ async def user_current_get(token : str = Depends(schema)) :
     )
     try :
         user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = user.get('sub', None)
+        username = user.get('sub')
         if username :
             user = user_get(user_fake_db, username)
             if user :
                 return user
         else :
-            raise credentials_exception
-    except JWTERROR :
-        raise credentials_exception
+            pass
+    except JWTError :
+        pass
+
+
+async def get_current_active_user(current_user: User = Depends(user_current_get)):
+    if current_user.disabled:
+        pass
+    return current_user
+
 
 @app.post('/token', response_model=Token)
 async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
@@ -112,6 +119,6 @@ async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
     )
 
 
-@app.get('/user/myinf/', response_model=Token)
-async def user_info(current_user : User) :
-    return user_current_get(current_user)
+@app.get('/user/myinf/', response_model=User)
+async def user_info(current_user : User = Depends(get_current_active_user)) :
+    return current_user
