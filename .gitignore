@@ -1,3 +1,10 @@
+# venv
+simple_api_env
+
+
+# ignore some test files and private files
+ignores
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
