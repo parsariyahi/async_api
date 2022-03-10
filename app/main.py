@@ -5,6 +5,7 @@ from jose import JWTError, jwt
 from typing import Optional, Any
 
 SECRET_KEY = 'de7cedf364a2bd8ace889a8179887ddbcbb474bcbb024dd782519f9b59e39d24'
+
 ALGORITHM = 'HS256'
 
 
