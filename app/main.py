@@ -27,10 +27,32 @@ user_fake_db = {
 }
 
 
+product_fake_db = {
+    1 : {
+        'id' : 1,
+        'name' : 'ice cream',
+        'price' : 5,
+        'description' : 'a cold and sweet ice cream with choco',
+        },
+
+    2 : {
+        'id' : 2,
+        'name' : 'cream',
+        'price' : 1,
+        'description' : 'vanilla cream',
+        },
+
+    3 : {
+        'id' : 3,
+        'name' : 'milk',
+        'price' : 10,
+        'description' : 'its just white',
+        },
+}
+
+
 class Token(BaseModel):
     access_token : str
-    token_type : str
-
 
 class TokenData(BaseModel):
     username : Optional[str] = None
@@ -43,10 +65,9 @@ class User(BaseModel):
     email : Optional[str] = None
     # national id should be string because sometimes it start with 0
     national_id : Optional[str] = None
-    disabled : Optional[bool] = None
 
 
-class UserInDB(User):
+class UserIn(User):
     password : str
 
 
@@ -56,13 +77,12 @@ scheme = OAuth2PasswordBearer(tokenUrl='token')
 app = FastAPI()
 
 # TODO hash passwords
-
 def user_get(db, username : str) :
     if username in db :
         user = db[username]
-        return UserInDB(**user)
+        return UserIn(**user)
 
-def user_pass_check(password, user_password) :
+def user_pass_check(password : str, user_password : str) :
     return password == user_password
 
 def user_authenticate(db, username : str, password : str) :
@@ -79,29 +99,12 @@ def create_accsess_token(data : dict) :
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 async def user_current_get(token : str = Depends(scheme)) :
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    try :
-        user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = user.get('sub')
-        if username :
-            user = user_get(user_fake_db, username)
-            if user :
-                return user
-        else :
-            pass
-    except JWTError :
-        pass
-
-
-async def get_current_active_user(current_user: User = Depends(user_current_get)):
-    if current_user.disabled:
-        pass
-    return current_user
-
+    user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    username = user.get('sub')
+    if username :
+        user = user_get(user_fake_db, username)
+        if user :
+            return user
 
 @app.post('/token', response_model=Token)
 async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
@@ -109,16 +112,15 @@ async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
 
     if user :
         access_token = create_accsess_token({'sub' : user.username})
-        return {'access_token' : access_token, 'token_type' : 'bearer'}
+        return {'access_token' : access_token}
 
     # if user was not found return 401 error
     return HTTPException(
         status.HTTP_401_UNAUTHORIZED,
         'incorrect username or password',
-        headers={"WWW-Authenticate": "Bearer"},
     )
 
 
 @app.get('/user/myinf/', response_model=User)
-async def user_info(current_user : User = Depends(get_current_active_user)) :
+async def user_info(current_user : User = Depends(user_current_get)) :
     return current_user
