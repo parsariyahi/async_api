@@ -1,8 +1,10 @@
+import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, Form, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from jose import JWTError, jwt
-from typing import Optional, Any
+from typing import Optional
+from re import match
 
 SECRET_KEY = 'de7cedf364a2bd8ace889a8179887ddbcbb474bcbb024dd782519f9b59e39d24'
 
@@ -111,17 +113,21 @@ def user_get(db, username : str) :
         user = db[username]
         return UserIn(**user)
 
-def user_pass_check(password : str, user_password : str) :
+def user_password_check(password : str, user_password : str) :
     return password == user_password
 
 def user_authenticate(db, username : str, password : str) :
     user = user_get(db, username)
     if user :
-        if user_pass_check(password, user.password) :
+        if user_password_check(password, user.password) :
             return user
 
     return None
-    #return False
+
+def user_input_validation(password, email, national_id) :
+    password_validation(password)
+    email_validation(email)
+    national_id_validation(national_id)
 
 async def user_current_get(token : str = Depends(scheme)) :
     user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -139,6 +145,34 @@ async def user_current_get(token : str = Depends(scheme)) :
 # --------------- user functions  --------------- 
 
 
+def password_validation(password) :
+    if match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$', password) :
+        return None
+
+    raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            'invalid password',
+            )
+
+def email_validation(email) :
+    if match(r'^[\w]+@([\w-]+\.)+[\w-]{2,4}$', email) :
+        return None
+    else :
+        raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                'invalid email',
+                )
+
+def national_id_validation(national_id) :
+    if len(national_id) == 10 :
+        return None
+
+    raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            'invalid national id',
+            )
+
+
 # --------------- product functions  --------------- 
 
 def product_get(db, id : int) -> Product : 
@@ -151,7 +185,7 @@ def product_get(db, id : int) -> Product :
 
 def product_add(db, product: Product) :
     if product.id in db :
-        return None, 5 
+        return (None, 5)
 
     try :
         db[product.id] = {
@@ -161,12 +195,12 @@ def product_add(db, product: Product) :
                 'description' : product.description,
         }
 
-        return product, 1
+        return (product, 1)
 
     except :
-        return None, 0
+        return (None, 0)
 
-def product_update(db, id: int, key: Any, value: Any) :
+def product_update(db, id: int, key, value) :
     if id in db :
         db[id][key] = value
         return True
@@ -199,20 +233,26 @@ async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
     )
 
 
+@app.post('/user/register/')
+async def register(form_data: UserIn) :
+    user_input_validation(form_data.password, form_data.email, form_data.national_id)
+    
+
+
 # return aouthorized user info
 @app.get('/user/myinf/', response_model=User)
 async def user_info(current_user : User = Depends(user_current_get)) :
     return current_user
 
 # read a prudoct whith id
-@app.get('/prd/read/{id}', response_model=Product)
+@app.get('/product/read/{id}', response_model=Product)
 async def get_product(id : int) :
     return product_get(product_fake_db, id)
 
 
 # TODO create a better return with status codes
 # add new product
-@app.post('/prd/add/', status_code=status.HTTP_201_CREATED)
+@app.post('/product/add/', status_code=status.HTTP_201_CREATED)
 async def add_product(product: Product) :
     res, status = product_add(product_fake_db, product)
 
@@ -225,8 +265,8 @@ async def add_product(product: Product) :
     return {'result' : 'there is a problem! please try again'}
 
 # update a product with id
-@app.put('/prd/edit/{id}')
-async def update_product(id: int, key: Any, value: Any) :
+@app.put('/product/edit/{id}')
+async def update_product(id: int, key, value) :
     res = product_update(product_fake_db, id, key, value)
     
     if res :
@@ -235,7 +275,7 @@ async def update_product(id: int, key: Any, value: Any) :
     return {'result' : False}
 
 # delete a product with id
-@app.delete('/prd/del/{id}')
+@app.delete('/product/del/{id}')
 async def delete_product(id: int) :
     res = product_delete(product_fake_db, id)
 
@@ -243,3 +283,6 @@ async def delete_product(id: int) :
         return {'result' : res, 'deleted field' : product_fake_db}
 
     return {'result' : False}
+
+if __name__ == '__main__' :
+    uvicorn.run('main:app', debug=True)
