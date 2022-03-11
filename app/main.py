@@ -48,7 +48,6 @@ class Product(BaseModel) :
     description : Optional[str]
 
 
-
 scheme = OAuth2PasswordBearer(tokenUrl='token')
 app = FastAPI()
 
@@ -56,8 +55,6 @@ app = FastAPI()
 # --------------- token functions  --------------- 
 def token_create(data : dict) :
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
-
-
 
 # --------------- user functions  --------------- 
 def user_is_exist(coll, username: str) -> bool :
@@ -76,7 +73,6 @@ def user_add(coll, user: UserInDb) -> bool :
     coll.insert_one(user.dict())
     return True
 
-
 def user_get(coll, username: str) -> UserInDb:
     for user in coll.find({'username': username}, {'_id': 0}) :
         if user :
@@ -90,9 +86,8 @@ def user_authenticate(coll, username: str, password: str) -> UserInDb :
     if user :
         if user_password_check(password, user.password) :
             return user
-
+        
     return None
-
 
 async def user_current_get(token: str = Depends(scheme)) -> UserInDb :
     user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -195,7 +190,6 @@ def product_delete(coll, id: int) -> bool :
         status.HTTP_404_NOT_FOUND,
         'the product is not exist',
     )
-
 
 
 # --------------- routes --------------- 
