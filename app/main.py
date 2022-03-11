@@ -34,7 +34,7 @@ class User(BaseModel):
     national_id : Optional[str] = None
 
 
-class UserInDb(User):
+class UserInDB(User):
     password : str
 
 class Product(BaseModel) :
@@ -54,38 +54,42 @@ def token_create(data: dict) :
 
 # --------------- user functions  --------------- 
 def user_is_exist(coll, username: str) -> bool :
-    for user in coll.find({'username': username}, {'_id': 0}) :
+    for user in coll.find(
+        {'username': username},
+        {'_id': 0},
+    ) :
         if user :
             return True
 
         return False
 
-def user_add(coll, user: UserInDb) -> bool :
+def user_add(coll, user: UserInDB) -> bool :
     if user_is_exist(coll, user.username) :
         raise HTTPException(
             status.HTTP_409_CONFLICT,
-            'the user is exist'
+            'the user is exist',
         )
     coll.insert_one(user.dict())
     return True
 
-def user_get(coll, username: str) -> UserInDb:
-    for user in coll.find({'username': username}, {'_id': 0}) :
+def user_get(coll, username: str) -> UserInDB:
+    for user in coll.find(
+        {'username': username},
+        {'_id': 0},
+    ) :
         if user :
-            return UserInDb(**user)
+            return UserInDB(**user)
 
 def user_password_check(password: str, user_password: str) -> bool :
     return password == user_password
 
-def user_authenticate(coll, username: str, password: str) -> UserInDb :
+def user_authenticate(coll, username: str, password: str) -> UserInDB :
     user = user_get(coll, username)
     if user :
         if user_password_check(password, user.password) :
             return user
-        
-    return None
 
-async def user_current_get(token: str = Depends(scheme)) -> UserInDb :
+async def user_current_get(token: str = Depends(scheme)) -> UserInDB :
     user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     username = user.get('sub')
     if username :
@@ -95,7 +99,7 @@ async def user_current_get(token: str = Depends(scheme)) -> UserInDb :
 
     raise HTTPException(
         status.HTTP_401_UNAUTHORIZED,
-        'invalid user'
+        'invalid user',
     )
 
 # --------------- validation  ---------------
@@ -106,7 +110,7 @@ def password_validation(password: str) -> None :
     It contains at least one upper case alphabet (A-Z)
     It contains at least one lower case alphabet (a-z)
     It contains at least one special character which includes (! @ # $ % & * ( ) - + = ^ .)
-    It doesn’t contain any white space
+    It does not contain any white space
     """
     if match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$', password) :
         return None
@@ -153,7 +157,7 @@ def product_is_exist(coll, id: int) -> bool :
         if product :
             return True
 
-        return False
+    return False
 
 def product_get(coll, id: int) -> Product :
     if product_is_exist(coll, id) :
@@ -220,23 +224,22 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) :
     )
 
 
-@app.post('/user/register/', response_model=Token, status_code=status.HTTP_201_CREATED)
-async def register(form_data: UserInDb) :
+@app.post('/user/register/', status_code=status.HTTP_201_CREATED)
+async def register(form_data: UserInDB) :
     if user_input_validation(
         form_data.password, \
         form_data.email, \
         form_data.national_id
     ) :  
         if user_add(user_coll, form_data) :
-            {'status': True}
+            {'detail': 'user created'}
     
 # return aouthorized user info
 @app.get('/user/myinf/', response_model=User)
 async def user_info(current_user: User = Depends(user_current_get)) :
     return current_user
 
-#CRUD -> create, read, update, delete
-
+# CRUD -> create, read, update, delete
 # read a prudoct whith id
 @app.get('/product/read/{id}', response_model=Product)
 async def get_product(id: int) :
