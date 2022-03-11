@@ -124,10 +124,6 @@ def user_authenticate(db, username : str, password : str) :
 
     return None
 
-def user_input_validation(password, email, national_id) :
-    password_validation(password)
-    email_validation(email)
-    national_id_validation(national_id)
 
 async def user_current_get(token : str = Depends(scheme)) :
     user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -142,6 +138,11 @@ async def user_current_get(token : str = Depends(scheme)) :
         'invalid user'
     )
 
+
+def user_input_validation(password, email, national_id) :
+    password_validation(password)
+    email_validation(email)
+    national_id_validation(national_id)
 # --------------- user functions  --------------- 
 
 
