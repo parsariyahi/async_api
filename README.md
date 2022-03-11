@@ -2,10 +2,10 @@
 
 ## about
 
-this api has two part (User & Product)
+this api has two parts (User & Product)
 
-User -> can register and authorize throw oauth2 with JWT
-Product -> this part is based on CRUD (Create, Read, Update, Delete)
+- User -> can register and authorize throw oauth2 with JWT
+- Product -> this part is based on CRUD (Create, Read, Update, Delete)
 
 i used MongoDB for this project
 
@@ -17,4 +17,4 @@ i used MongoDB for this project
 - jose
 - MongoDB
 
-[how to build](BUILD.md)
+## [how to build](BUILD.md)
