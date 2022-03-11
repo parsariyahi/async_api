@@ -6,3 +6,6 @@
 - uvicorn
 - pydantic
 - jose
+
+
+[how to build](BUILD.md)
