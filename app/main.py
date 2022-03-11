@@ -1,24 +1,20 @@
-import uvicorn
-import pymongo
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from jose import jwt
 from typing import Optional
 from re import match
+import uvicorn
+import pymongo
 
 SECRET_KEY = 'de7cedf364a2bd8ace889a8179887ddbcbb474bcbb024dd782519f9b59e39d24'
 ALGORITHM = 'HS256'
 
-
-
 # --------------- database --------------- 
-myclient = pymongo.MongoClient("mongodb://localhost:27017/")
-
-mydb = myclient["simple_api"]
-
-user_coll = mydb["users"]
-product_coll = mydb["products"]
+client = pymongo.MongoClient("mongodb://localhost:27017/")
+db = client["simple_api"]
+user_coll = db["users"]
+product_coll = db["products"]
 
 
 # --------------- models --------------- 
@@ -53,7 +49,7 @@ app = FastAPI()
 
 
 # --------------- token functions  --------------- 
-def token_create(data : dict) :
+def token_create(data: dict) :
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
 # --------------- user functions  --------------- 
@@ -102,8 +98,16 @@ async def user_current_get(token: str = Depends(scheme)) -> UserInDb :
         'invalid user'
     )
 
-# --------------- validation  --------------- 
+# --------------- validation  ---------------
 def password_validation(password: str) -> None :
+    """
+    It contains at least 8 characters and at most 20 characters.
+    It contains at least one digit (0-9)
+    It contains at least one upper case alphabet (A-Z)
+    It contains at least one lower case alphabet (a-z)
+    It contains at least one special character which includes (! @ # $ % & * ( ) - + = ^ .)
+    It doesn’t contain any white space
+    """
     if match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$', password) :
         return None
     raise HTTPException(
@@ -112,6 +116,10 @@ def password_validation(password: str) -> None :
             )
 
 def email_validation(email: str) -> None :
+    """
+    the standard email format
+    example@examle.xxx
+    """
     if match(r'^[\w]+@([\w-]+\.)+[\w-]{2,4}$', email) :
         return None
     raise HTTPException(
@@ -120,6 +128,10 @@ def email_validation(email: str) -> None :
             )
 
 def national_id_validation(national_id: str) -> None :
+    """
+    it contains exactly ten digit
+    iranian national id format is : xxx-xxxxxx-x
+    """
     if len(national_id) == 10 :
         return None
     raise HTTPException(
@@ -128,6 +140,7 @@ def national_id_validation(national_id: str) -> None :
             )
 
 def user_input_validation(password: str, email: str, national_id: str) -> bool :
+    # here are all validator functions for user
     password_validation(password)
     email_validation(email)
     national_id_validation(national_id)
@@ -142,11 +155,10 @@ def product_is_exist(coll, id: int) -> bool :
 
         return False
 
-def product_get(coll, id : int) -> Product :
+def product_get(coll, id: int) -> Product :
     if product_is_exist(coll, id) :
         for product in coll.find({'id': id}, {'_id': 0}) :
-            if product :
-                return Product(**product)
+            return Product(**product)
 
     raise HTTPException(
         status.HTTP_409_CONFLICT,
@@ -192,16 +204,16 @@ def product_delete(coll, id: int) -> bool :
     )
 
 
-# --------------- routes --------------- 
+# --------------- routes ---------------
+# this route will create the token
 @app.post('/token', response_model=Token)
-async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
+async def login(form_data: OAuth2PasswordRequestForm = Depends()) :
     user = user_authenticate(user_coll, form_data.username, form_data.password)
 
     if user :
-        access_token = token_create({'sub' : user.username})
-        return {'access_token' : access_token}
+        access_token = token_create({'sub': user.username})
+        return {'access_token': access_token}
 
-    # if user was not found return 401 error
     raise HTTPException(
         status.HTTP_401_UNAUTHORIZED,
         'incorrect username or password',
@@ -216,21 +228,20 @@ async def register(form_data: UserInDb) :
         form_data.national_id
     ) :  
         if user_add(user_coll, form_data) :
-            {'status' : True}
+            {'status': True}
     
 # return aouthorized user info
 @app.get('/user/myinf/', response_model=User)
-async def user_info(current_user : User = Depends(user_current_get)) :
+async def user_info(current_user: User = Depends(user_current_get)) :
     return current_user
 
+#CRUD -> create, read, update, delete
 
 # read a prudoct whith id
 @app.get('/product/read/{id}', response_model=Product)
-async def get_product(id : int) :
+async def get_product(id: int) :
     return product_get(product_coll, id)
 
-
-# TODO create a better return with status codes
 # add new product
 @app.post('/product/add/', status_code=status.HTTP_201_CREATED)
 async def add_product(product: Product) :
@@ -246,22 +257,21 @@ async def update_product(id: int, key, value) :
 async def delete_product(id: int) :
     product_delete(product_coll, id)
 
-
+# --------------- test routes ---------------
 # test route for uesrs
 @app.get('/user/all/')
 async def user_all_get() :
     res = {}
-    for user in user_coll.find({}, {'_id' : 0}) :
+    for user in user_coll.find({}, {'_id': 0}) :
         res[user['username']] = user
 
     return res
-
 
 # test route for products
 @app.get('/product/all/')
 async def product_all_get() :
     res = {}
-    for product in product_coll.find({}, {'_id' : 0}) :
+    for product in product_coll.find({}, {'_id': 0}) :
         res[product['id']] = product
 
     return res
