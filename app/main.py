@@ -1,67 +1,27 @@
 import uvicorn
-from fastapi import FastAPI, Depends, HTTPException, Form, status
+import pymongo
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from jose import JWTError, jwt
+from jose import jwt
 from typing import Optional
 from re import match
 
 SECRET_KEY = 'de7cedf364a2bd8ace889a8179887ddbcbb474bcbb024dd782519f9b59e39d24'
-
 ALGORITHM = 'HS256'
 
 
 
 # --------------- database --------------- 
+myclient = pymongo.MongoClient("mongodb://localhost:27017/")
 
-user_fake_db = {
-    'prrh' : {
-        'username' : 'prrh',
-        'first_name' : 'parsa',
-        'last_name' : 'riyahi',
-        'email' : 'parsa@gmail.com',
-        'password' : 'parsa1234',
-        'national_id' : '4619878165',
-    }, 
-    'alip' : {
-        'username' : 'alip',
-        'first_name' : 'ali',
-        'last_name' : 'prkh',
-        'email' : 'ali@gmail.com',
-        'password' : 'ali1234',
-        'national_id' : '0019878165',
-    }, 
-}
+mydb = myclient["simple_api"]
 
-
-product_fake_db = {
-    1 : {
-        'id' : 1,
-        'name' : 'ice cream',
-        'price' : 5,
-        'description' : 'a cold and sweet ice cream with choco',
-        },
-
-    2 : {
-        'id' : 2,
-        'name' : 'cream',
-        'price' : 7,
-        'description' : 'vanilla cream',
-        },
-
-    3 : {
-        'id' : 3,
-        'name' : 'milk',
-        'price' : 10,
-        'description' : 'its just white',
-        },
-}
-
-# --------------- database --------------- 
+user_coll = mydb["users"]
+product_coll = mydb["products"]
 
 
 # --------------- models --------------- 
-
 class Token(BaseModel):
     access_token : str
 
@@ -78,7 +38,7 @@ class User(BaseModel):
     national_id : Optional[str] = None
 
 
-class UserIn(User):
+class UserInDb(User):
     password : str
 
 class Product(BaseModel) :
@@ -87,37 +47,46 @@ class Product(BaseModel) :
     price : int
     description : Optional[str]
 
-# --------------- models --------------- 
 
 
 scheme = OAuth2PasswordBearer(tokenUrl='token')
-
 app = FastAPI()
 
 
-
 # --------------- token functions  --------------- 
-
-# TODO create expire time for token
 def token_create(data : dict) :
     return jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
 
-# --------------- token functions  --------------- 
 
 
 # --------------- user functions  --------------- 
+def user_is_exist(coll, username: str) -> bool :
+    for user in coll.find({'username': username}, {'_id': 0}) :
+        if user :
+            return True
 
-# TODO hash passwords
-def user_get(db, username : str) :
-    if username in db :
-        user = db[username]
-        return UserIn(**user)
+        return False
 
-def user_password_check(password : str, user_password : str) :
+def user_add(coll, user: UserInDb) -> bool :
+    if user_is_exist(coll, user.username) :
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            'the user is exist'
+        )
+    coll.insert_one(user.dict())
+    return True
+
+
+def user_get(coll, username: str) -> UserInDb:
+    for user in coll.find({'username': username}, {'_id': 0}) :
+        if user :
+            return UserInDb(**user)
+
+def user_password_check(password: str, user_password: str) -> bool :
     return password == user_password
 
-def user_authenticate(db, username : str, password : str) :
-    user = user_get(db, username)
+def user_authenticate(coll, username: str, password: str) -> UserInDb :
+    user = user_get(coll, username)
     if user :
         if user_password_check(password, user.password) :
             return user
@@ -125,11 +94,11 @@ def user_authenticate(db, username : str, password : str) :
     return None
 
 
-async def user_current_get(token : str = Depends(scheme)) :
+async def user_current_get(token: str = Depends(scheme)) -> UserInDb :
     user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
     username = user.get('sub')
     if username :
-        user = user_get(user_fake_db, username)
+        user = user_get(user_coll, username)
         if user :
             return user
 
@@ -138,90 +107,101 @@ async def user_current_get(token : str = Depends(scheme)) :
         'invalid user'
     )
 
-
-def user_input_validation(password, email, national_id) :
-    password_validation(password)
-    email_validation(email)
-    national_id_validation(national_id)
-# --------------- user functions  --------------- 
-
-
-def password_validation(password) :
+# --------------- validation  --------------- 
+def password_validation(password: str) -> None :
     if match(r'^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!#%*?&]{6,20}$', password) :
         return None
-
     raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             'invalid password',
             )
 
-def email_validation(email) :
+def email_validation(email: str) -> None :
     if match(r'^[\w]+@([\w-]+\.)+[\w-]{2,4}$', email) :
         return None
-    else :
-        raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                'invalid email',
-                )
+    raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            'invalid email',
+            )
 
-def national_id_validation(national_id) :
+def national_id_validation(national_id: str) -> None :
     if len(national_id) == 10 :
         return None
-
     raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             'invalid national id',
             )
 
+def user_input_validation(password: str, email: str, national_id: str) -> bool :
+    password_validation(password)
+    email_validation(email)
+    national_id_validation(national_id)
+    return True
+
 
 # --------------- product functions  --------------- 
+def product_is_exist(coll, id: int) -> bool :
+    for product in coll.find({'id': id}, {'_id': 0}) :
+        if product :
+            return True
 
-def product_get(db, id : int) -> Product : 
-    if id in db :
-        product = db[id]
-        return Product(**product)
+        return False
 
-    return None
-    #return False
+def product_get(coll, id : int) -> Product :
+    if product_is_exist(coll, id) :
+        for product in coll.find({'id': id}, {'_id': 0}) :
+            if product :
+                return Product(**product)
 
-def product_add(db, product: Product) :
-    if product.id in db :
-        return (None, 5)
+    raise HTTPException(
+        status.HTTP_409_CONFLICT,
+        'the product is not exist',
+    )
 
+
+def product_add(coll, product: Product) -> None:
+    if product_is_exist(coll, product.id) :
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            'the product is exist',
+        )
     try :
-        db[product.id] = {
-                'id' : product.id,
-                'name' : product.name,
-                'price' : product.price,
-                'description' : product.description,
-        }
-
-        return (product, 1)
-
+        coll.insert_one(product.dict())
     except :
-        return (None, 0)
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            'Database error',
+        )
 
-def product_update(db, id: int, key, value) :
-    if id in db :
-        db[id][key] = value
+def product_update(coll, id: int, key, value) -> Product :
+    if product_is_exist(coll, id) :
+        coll.update_one(
+            {'id': id} ,
+            {'$set': {key : value} },
+        )
+        return product_get(coll, id)
+
+    raise HTTPException(
+        status.HTTP_404_NOT_FOUND,
+        'the product is not exist',
+    )
+
+def product_delete(coll, id: int) -> bool :
+    if product_is_exist(coll, id) :
+        coll.delete_one({'id': id})
         return True
 
-    return None
-
-def product_delete(db, id: int) :
-    if id in db :
-        del db[id]
-        return True
-
-    return None
-
-# --------------- product functions  --------------- 
+    raise HTTPException(
+        status.HTTP_404_NOT_FOUND,
+        'the product is not exist',
+    )
 
 
 
+# --------------- routes --------------- 
 @app.post('/token', response_model=Token)
 async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
-    user = user_authenticate(user_fake_db, form_data.username, form_data.password)
+    user = user_authenticate(user_coll, form_data.username, form_data.password)
 
     if user :
         access_token = token_create({'sub' : user.username})
@@ -234,56 +214,64 @@ async def login(form_data : OAuth2PasswordRequestForm = Depends()) :
     )
 
 
-@app.post('/user/register/')
-async def register(form_data: UserIn) :
-    user_input_validation(form_data.password, form_data.email, form_data.national_id)
+@app.post('/user/register/', response_model=Token, status_code=status.HTTP_201_CREATED)
+async def register(form_data: UserInDb) :
+    if user_input_validation(
+        form_data.password, \
+        form_data.email, \
+        form_data.national_id
+    ) :  
+        if user_add(user_coll, form_data) :
+            {'status' : True}
     
-
-
 # return aouthorized user info
 @app.get('/user/myinf/', response_model=User)
 async def user_info(current_user : User = Depends(user_current_get)) :
     return current_user
 
+
 # read a prudoct whith id
 @app.get('/product/read/{id}', response_model=Product)
 async def get_product(id : int) :
-    return product_get(product_fake_db, id)
+    return product_get(product_coll, id)
 
 
 # TODO create a better return with status codes
 # add new product
 @app.post('/product/add/', status_code=status.HTTP_201_CREATED)
 async def add_product(product: Product) :
-    res, status = product_add(product_fake_db, product)
-
-    if res :
-        return {'result' : res, 'db' : product_fake_db}
-
-    if status == 5 :
-        return {'result' : 'the product is alredy exist'}
-
-    return {'result' : 'there is a problem! please try again'}
+    product_add(product_coll, product)
 
 # update a product with id
-@app.put('/product/edit/{id}')
+@app.put('/product/edit/{id}', response_model=Product)
 async def update_product(id: int, key, value) :
-    res = product_update(product_fake_db, id, key, value)
-    
-    if res :
-        return {'result' : res, 'edited field' : product_fake_db[id]}
-    
-    return {'result' : False}
+    return product_update(product_coll, id, key, value)
 
 # delete a product with id
 @app.delete('/product/del/{id}')
 async def delete_product(id: int) :
-    res = product_delete(product_fake_db, id)
+    product_delete(product_coll, id)
 
-    if res :
-        return {'result' : res, 'deleted field' : product_fake_db}
 
-    return {'result' : False}
+# test route for uesrs
+@app.get('/user/all/')
+async def user_all_get() :
+    res = {}
+    for user in user_coll.find({}, {'_id' : 0}) :
+        res[user['username']] = user
+
+    return res
+
+
+# test route for products
+@app.get('/product/all/')
+async def product_all_get() :
+    res = {}
+    for product in product_coll.find({}, {'_id' : 0}) :
+        res[product['id']] = product
+
+    return res
+
 
 if __name__ == '__main__' :
     uvicorn.run('main:app', debug=True)
