@@ -15,6 +15,6 @@ i used MongoDB for this project
 - uvicorn
 - pydantic
 - jose
-- MongoDB
+- MongoDB, motor
 
 ## [how to build](BUILD.md)
