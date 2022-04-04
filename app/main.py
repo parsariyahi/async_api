@@ -1,52 +1,23 @@
+from typing import Optional
+from re import match
+
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
 from jose import jwt
-from typing import Optional
-from re import match
 import uvicorn
-import pymongo
+
+from .src import Token, TokenData, UserInDB, User, Product, User_DB, Product_DB, db
 
 SECRET_KEY = 'de7cedf364a2bd8ace889a8179887ddbcbb474bcbb024dd782519f9b59e39d24'
 ALGORITHM = 'HS256'
 
 # --------------- database --------------- 
-client = pymongo.MongoClient("mongodb://localhost:27017/")
-db = client["simple_api"]
-user_coll = db["users"]
-product_coll = db["products"]
-
-
-# --------------- models --------------- 
-class Token(BaseModel):
-    access_token : str
-
-class TokenData(BaseModel):
-    username : Optional[str] = None
-
-
-class User(BaseModel):
-    username : str
-    first_name : Optional[str] = None
-    last_name : Optional[str] = None
-    email : Optional[str] = None
-    # national id should be string because sometimes it start with 0
-    national_id : Optional[str] = None
-
-
-class UserInDB(User):
-    password : str
-
-class Product(BaseModel) :
-    id : int
-    name : str
-    price : int
-    description : Optional[str]
-
+user_db = User_DB(db)
+product_db = Product_DB(db)
 
 scheme = OAuth2PasswordBearer(tokenUrl='token')
 app = FastAPI()
-
 
 # --------------- token functions  --------------- 
 def token_create(data: dict) :
@@ -61,7 +32,7 @@ def user_is_exist(coll, username: str) -> bool :
         if user :
             return True
 
-        return False
+    return False
 
 def user_add(coll, user: UserInDB) -> bool :
     if user_is_exist(coll, user.username) :
