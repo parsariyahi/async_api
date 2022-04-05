@@ -1,23 +1,28 @@
 class User_DB :
-    def __init__(self, db) :
-        self.db = db
 
-    async def create_user(self, user: dict) :
-        if await self.db.users.insert_one(user) :
-            return True
+    @staticmethod
+    async def create_user(coll, user: dict) :
+        a = await coll.insert_one(user)
+        return a
 
-        return False
+    @staticmethod
+    async def read_user(coll, username: str) :
+        """This funciton will read the user
 
-    async def read_user(self, username: str) :
-        user = await self.db.users.find_one({'username': username}, {'_id': 0})
+        Inputs: [username: str]
+
+        return: [user: dict] or [False]
+        """
+        user = await coll.find_one({'username': username}, {'_id': 0})
         if user :
             return user
 
         return False
 
-    async def all_user(self) :
+    @staticmethod
+    async def all_user(coll) :
         res = []
-        users = self.db.users.find()
+        users = coll.find()
         if users :
             async for user in users:
                 res.append(user)

@@ -7,14 +7,14 @@ from pydantic import BaseModel
 from jose import jwt
 import uvicorn
 
-from .src import Token, TokenData, UserInDB, User, Product, User_DB, Product_DB, db
+from src import Token, TokenData, UserInDB, User, Product, User_DB, Product_DB, db, client
 
 SECRET_KEY = 'de7cedf364a2bd8ace889a8179887ddbcbb474bcbb024dd782519f9b59e39d24'
 ALGORITHM = 'HS256'
 
 # --------------- database --------------- 
-user_db = User_DB(db)
-product_db = Product_DB(db)
+#user_db = User_DB(db.users)
+#product_db = Product_DB(db)
 
 scheme = OAuth2PasswordBearer(tokenUrl='token')
 app = FastAPI()
@@ -34,14 +34,17 @@ def user_is_exist(coll, username: str) -> bool :
 
     return False
 
-def user_add(coll, user: UserInDB) -> bool :
-    if user_is_exist(coll, user.username) :
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            'the user is exist',
-        )
-    coll.insert_one(user.dict())
-    return True
+async def user_add(user: UserInDB) -> bool :
+    #if user_is_exist(coll, user.username) :
+    #    raise HTTPException(
+    #        status.HTTP_409_CONFLICT,
+    #        'the user is exist',
+    #    )
+    res = await User_DB.create_user(db.users, user.dict())
+    if res:
+        return True
+    
+    return False
 
 def user_get(coll, username: str) -> UserInDB:
     for user in coll.find(
@@ -197,14 +200,15 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()) :
 
 @app.post('/user/register/', status_code=status.HTTP_201_CREATED)
 async def register(form_data: UserInDB) :
-    if user_input_validation(
-        form_data.password, \
-        form_data.email, \
-        form_data.national_id
-    ) :  
-        if user_add(user_coll, form_data) :
-            {'detail': 'user created'}
-    
+    #if user_input_validation(
+        #form_data.password, \
+        #form_data.email, \
+        #form_data.national_id
+    #) :  
+    res = await user_add(form_data)
+
+    return {'res' : 'skajflkadsjf'}
+
 # return aouthorized user info
 @app.get('/user/myinf/', response_model=User)
 async def user_info(current_user: User = Depends(user_current_get)) :
