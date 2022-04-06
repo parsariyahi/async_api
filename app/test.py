@@ -16,5 +16,14 @@ data = {
 loop = asyncio.get_event_loop()
 #res = loop.run_until_complete(u_db.create_user(data))
 #print(res)
-res = loop.run_until_complete(User_DB.read_user(db.users, 'parsarh'))
-print(res)
+
+res = loop.run_until_complete(User_DB.all_user(db.users))
+
+for i in res :
+    print(i, '\n')
+
+#res = loop.run_until_complete(User_DB.all_user(db.users))
+#print(res)
+#
+#res = loop.run_until_complete(User_DB.all_user(db.users))
+#print(res)
