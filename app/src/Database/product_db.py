@@ -1,12 +1,20 @@
 class Product_DB:
 
     @staticmethod
+    async def __is_product_exist(coll, id: int) :
+        async for product in coll.find({'id': id}, {'_id': 0}) :
+            if product :
+                return True
+
+            return False
+
+    @staticmethod
     async def create_product(coll, product: dict) :
         await coll.insert_one(product)
 
     @staticmethod
     async def delete_product(coll, id: int) :
-        if await coll.delete_one(id) :
+        if await coll.delete_one({'id': id}) :
             return True
 
         return False

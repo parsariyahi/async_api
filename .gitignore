@@ -3,7 +3,7 @@ pr_api
 
 
 # ignore some test files and private files
-ignores
+test
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -38,20 +38,6 @@ def user_authenticate(coll, username: str, password: str) -> UserInDB :
         if user_password_check(password, user.password) :
             return user
 
-async def user_current_get(token: str = Depends(scheme)) -> UserInDB :
-    user = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    username = user.get('sub')
-    if username :
-        user = user_get(user_coll, username)
-        if user :
-            return user
-
-    raise HTTPException(
-        status.HTTP_401_UNAUTHORIZED,
-        'invalid user',
-    )
-
-
 
 
 
